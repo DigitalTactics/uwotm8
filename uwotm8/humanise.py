@@ -106,6 +106,25 @@ def _capitalise_first(text: str) -> str:
     return text
 
 
+def _capitalise_after_punctuation(text: str) -> str:
+    """Capitalise the first letter after sentence-ending punctuation.
+
+    Finds patterns like ``". foo"`` or ``"! bar"`` and upper-cases the
+    first alphabetic character following the punctuation + whitespace.
+
+    Args:
+        text: The input string.
+
+    Returns:
+        The string with post-punctuation letters capitalised.
+    """
+
+    def _upper(match: re.Match[str]) -> str:
+        return match.group(1) + match.group(2).upper()
+
+    return re.sub(r"([.!?]\s+)([a-z])", _upper, text)
+
+
 def _rewrite_filler_or_hedging(text: str, pattern: re.Pattern[str]) -> str:
     """Remove filler/hedging phrases and clean up capitalisation.
 
@@ -120,27 +139,7 @@ def _rewrite_filler_or_hedging(text: str, pattern: re.Pattern[str]) -> str:
     Returns:
         The cleaned text.
     """
-
-    def _replace(match: re.Match[str]) -> str:
-        """Replace a filler/hedging match, fixing capitalisation."""
-        start = match.start()
-        end = match.end()
-
-        # Check if the match is at the start of a line.
-        at_line_start = start == 0 or text[start - 1] == "\n"
-
-        # The remainder after the match -- we may need to capitalise it.
-        remainder_start = end
-        if remainder_start < len(text) and at_line_start:
-            # Find the first alphabetic character after the match and
-            # capitalise it by returning an empty replacement -- the
-            # caller will handle capitalisation in a second pass.
-            pass
-
-        # Return empty string; we handle capitalisation in a second pass.
-        return ""
-
-    result = pattern.sub(_replace, text)
+    result = pattern.sub("", text)
 
     # Clean up: collapse multiple spaces, fix leading whitespace on lines,
     # and capitalise sentence starts.
@@ -148,8 +147,9 @@ def _rewrite_filler_or_hedging(text: str, pattern: re.Pattern[str]) -> str:
     result = re.sub(r"^[ \t]+", "", result, flags=re.MULTILINE)
     # Collapse multiple spaces into one.
     result = re.sub(r"  +", " ", result)
-    # Capitalise the first letter of each sentence after a full stop or
-    # at the start of a line.
+    # Capitalise after sentence-ending punctuation (e.g. ". foo" -> ". Foo").
+    result = _capitalise_after_punctuation(result)
+    # Capitalise the first letter of each line.
     lines = result.split("\n")
     cleaned_lines: list[str] = []
     for line in lines:

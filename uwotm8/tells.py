@@ -199,7 +199,7 @@ TELLS.append(
 _FILLER_PHRASES: list[str] = [
     r"It'?s important to note that\s*",
     r"In today'?s world,?\s*",
-    r"Let'?s dive in\.?\s*",
+    r"Let'?s dive in(?:\s+to)?\.?\s*",
     r"In this article,?\s*",
     r"When it comes to\s+",
     r"At the end of the day,?\s*",
