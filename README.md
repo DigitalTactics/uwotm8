@@ -1,15 +1,13 @@
 # uwotm8
 
-[![Release](https://img.shields.io/github/v/release/i-dot-ai/uwotm8)](https://img.shields.io/github/v/release/i-dot-ai/uwotm8)
-[![Build status](https://img.shields.io/github/actions/workflow/status/i-dot-ai/uwotm8/main.yml?branch=main)](https://github.com/i-dot-ai/uwotm8/actions/workflows/main.yml?query=branch%3Amain)
-[![codecov](https://codecov.io/gh/i-dot-ai/uwotm8/branch/main/graph/badge.svg)](https://codecov.io/gh/i-dot-ai/uwotm8)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/i-dot-ai/uwotm8)](https://img.shields.io/github/commit-activity/m/i-dot-ai/uwotm8)
-[![License](https://img.shields.io/github/license/i-dot-ai/uwotm8)](https://img.shields.io/github/license/i-dot-ai/uwotm8)
+[![Release](https://img.shields.io/github/v/release/DigitalTactics/uwotm8)](https://img.shields.io/github/v/release/DigitalTactics/uwotm8)
+[![Build status](https://img.shields.io/github/actions/workflow/status/DigitalTactics/uwotm8/main.yml?branch=main)](https://github.com/DigitalTactics/uwotm8/actions/workflows/main.yml?query=branch%3Amain)
+[![License](https://img.shields.io/github/license/DigitalTactics/uwotm8)](https://img.shields.io/github/license/DigitalTactics/uwotm8)
 
-Converting American English to British English - a tool to automatically convert American English spelling to British English spelling in your text and code files.
+A tool to convert American English spelling to British English and remove common AI-generated text patterns to make content feel more naturally human-written.
 
-- **Github repository**: <https://github.com/i-dot-ai/uwotm8/>
-- **Documentation** <https://i-dot-ai.github.io/uwotm8/>
+- **Github repository**: <https://github.com/DigitalTactics/uwotm8/>
+- **Documentation** <https://digitaltactics.github.io/uwotm8/>
 
 ## Installation
 
@@ -56,8 +54,34 @@ print(en_gb_str)
 - Preserves original capitalization patterns
 - Supports Python file mode to convert only comments and docstrings, leaving code unchanged
 
-For full documentation, examples, and advanced usage, please visit the [documentation site](https://i-dot-ai.github.io/uwotm8/).
+### AI Tell Removal (`--humanise`)
+
+The `--humanise` flag detects and removes common patterns found in AI-generated text, making content feel more naturally human-written for a general audience. This includes:
+
+- Replacing em dashes, smart quotes, non-breaking spaces, and other Unicode artefacts with standard equivalents
+- Detecting filler phrases, hedging language, and repetitive transitions
+- Flagging structural patterns like single-sentence-then-bullet-list overuse
+- Reading age analysis with configurable targets (numeric or descriptive)
+- Multiple output modes: terminal report, inline annotations, and save-to-disk
+
+> **Note:** The purpose of the `--humanise` feature is to improve readability and remove stylistic artefacts commonly produced by AI text generation. It is not intended to obfuscate the origin of AI-generated content or to deceive readers about how text was produced. The goal is to make content more human-friendly for the end reader.
+
+```bash
+# Flag AI tells in a markdown file
+uwotm8 --humanise report.md
+
+# Automatically rewrite structural patterns
+uwotm8 --humanise --rewrite all --level full docs/
+
+# Analyse reading age and get simplification suggestions
+uwotm8 --humanise --reading-age general report.md
+
+# Combine with spelling conversion
+uwotm8 --humanise --strict src/
+```
+
+For full documentation, examples, and advanced usage, please visit the [documentation site](https://digitaltactics.github.io/uwotm8/).
 
 ---
 
-Repository initiated with [fpgmaas/cookiecutter-poetry](https://github.com/fpgmaas/cookiecutter-poetry).
+Originally forked from [i-dot-ai/uwotm8](https://github.com/i-dot-ai/uwotm8). Repository initiated with [fpgmaas/cookiecutter-poetry](https://github.com/fpgmaas/cookiecutter-poetry).

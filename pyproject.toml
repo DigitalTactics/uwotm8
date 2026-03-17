@@ -1,10 +1,10 @@
 [project]
 name = "uwotm8"
 dynamic = ["version"]
-description = "Converting American English to British English"
-authors = [{name = "i.AI", email = "packages@cabinetoffice.gov.uk"}]
-repository = "https://github.com/i-dot-ai/uwotm8"
-documentation = "https://i-dot-ai.github.io/uwotm8/"
+description = "Converting American English to British English and removing AI-generated text patterns"
+authors = [{name = "Chris Dean", email = "chris@digitaltactics.co.uk"}]
+repository = "https://github.com/DigitalTactics/uwotm8"
+documentation = "https://digitaltactics.github.io/uwotm8/"
 license = "MIT"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -14,6 +14,9 @@ packages = [
 
 [project.scripts]
 uwotm8 = "uwotm8.convert:main"
+
+[project.optional-dependencies]
+docx = ["python-docx>=0.8.11"]
 
 [build-system]
 requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
@@ -25,6 +28,10 @@ version = "0.0.0"
 [tool.poetry.dependencies]
 python = ">=3.9,<4.0"
 breame = "^0.1.2"
+python-docx = {version = ">=0.8.11", optional = true}
+
+[tool.poetry.extras]
+docx = ["python-docx"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "8.3.4"

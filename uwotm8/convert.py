@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import os
 import re
 import sys
@@ -454,6 +455,133 @@ def _handle_file_with_output(args: argparse.Namespace, src_file: Path) -> int:
         return 0
 
 
+def _parse_humanise_args(args: argparse.Namespace) -> dict[str, Any]:
+    """Extract and parse humanise-related arguments from the CLI namespace.
+
+    Args:
+        args: The parsed argparse namespace.
+
+    Returns:
+        A dict with keys: level, rewrite, reading_age_target, annotate,
+        report, check, strict, comments_only.
+    """
+    level: str = getattr(args, "level", "moderate") or "moderate"
+    rewrite: Optional[list[str]] = getattr(args, "rewrite", None)
+    reading_age_target: Optional[Union[int, str]] = getattr(args, "reading_age", None)
+
+    # Parse reading_age_target: try to convert to int if numeric.
+    if reading_age_target is not None:
+        with contextlib.suppress(ValueError, TypeError):
+            reading_age_target = int(reading_age_target)
+
+    # Parse rewrite into a list if provided as comma-separated string.
+    if rewrite is not None and isinstance(rewrite, str):
+        rewrite = [r.strip() for r in rewrite.split(",") if r.strip()]
+
+    return {
+        "level": level,
+        "rewrite": rewrite,
+        "reading_age_target": reading_age_target,
+        "annotate": getattr(args, "annotate", False),
+        "report": getattr(args, "report", None),
+        "check": getattr(args, "check", False),
+        "strict": getattr(args, "strict", False),
+        "comments_only": getattr(args, "comments_only", False),
+    }
+
+
+def _write_combined_report(
+    results: list[Any],
+    report_flag: Optional[str],
+    src_paths: list[str],
+) -> None:
+    """Merge results and write a combined report to disk.
+
+    Args:
+        results: List of HumaniseResult instances.
+        report_flag: Report file path (or empty string for default path).
+        src_paths: Source paths from the CLI.
+    """
+    from uwotm8.humanise import HumaniseResult
+    from uwotm8.output import default_report_path, write_report_to_disk
+
+    combined_findings: list[dict[str, Any]] = []
+    combined_reading_age = None
+    combined_text = ""
+    for result in results:
+        combined_findings.extend(result.findings)
+        if result.reading_age_report is not None:
+            combined_reading_age = result.reading_age_report
+        combined_text += result.text
+
+    combined_result = HumaniseResult(
+        text=combined_text,
+        findings=combined_findings,
+        reading_age_report=combined_reading_age,
+    )
+
+    rpath = report_flag if report_flag else None
+    if not rpath and src_paths:
+        rpath = default_report_path(src_paths[0])
+    if rpath:
+        write_report_to_disk(combined_result, rpath)
+
+
+def _run_humanise(args: argparse.Namespace) -> int:
+    """Dispatch humanise processing based on parsed CLI arguments.
+
+    Args:
+        args: The parsed argparse namespace.
+
+    Returns:
+        Exit code: 0 for clean / success, 1 for tells detected in check mode.
+    """
+    from uwotm8.humanise import humanise_paths, humanise_stream
+    from uwotm8.output import format_terminal_report
+
+    h = _parse_humanise_args(args)
+
+    if not args.src:
+        # Streaming mode: read from stdin, write to stdout.
+        for line in humanise_stream(
+            sys.stdin,
+            level=h["level"],
+            rewrite=h["rewrite"],
+            reading_age_target=h["reading_age_target"],
+        ):
+            sys.stdout.write(line)
+        return 0
+
+    # File/directory mode.
+    total, modified, results = humanise_paths(
+        paths=args.src,
+        level=h["level"],
+        rewrite=h["rewrite"],
+        reading_age_target=h["reading_age_target"],
+        check=h["check"],
+        strict=h["strict"],
+        annotate=h["annotate"],
+        comments_only=h["comments_only"],
+        report_path=h["report"],
+    )
+
+    # Print terminal report for each result.
+    for result in results:
+        if result.findings or result.reading_age_report:
+            report = format_terminal_report(result)
+            sys.stderr.write(report)
+
+    # Write report to disk if requested.
+    if h["report"] is not None:
+        _write_combined_report(results, h["report"], args.src)
+
+    # Check mode: return 1 if any tells were detected.
+    if h["check"]:
+        return 1 if any(r.findings for r in results) else 0
+
+    return 0
+
+
 def main() -> int:  # noqa: C901
     """Command-line interface."""
     parser = argparse.ArgumentParser(
@@ -517,7 +645,69 @@ def main() -> int:  # noqa: C901
         help="A space-separated string of words to ignore, or a path to a text file containing words to ignore.",
     )
 
+    # --- Humanise flags ---
+    parser.add_argument(
+        "--humanise",
+        action="store_true",
+        help="Activate AI tell detection and removal. Independent of spelling conversion.",
+    )
+
+    parser.add_argument(
+        "--rewrite",
+        default=None,
+        help=(
+            "Structural rewrite sub-options: 'all' or comma-separated list "
+            "(e.g. 'bullet-lists,filler-phrases'). Requires --humanise."
+        ),
+    )
+
+    parser.add_argument(
+        "--annotate",
+        action="store_true",
+        help="Insert format-aware inline annotation comments at each detected tell. Requires --humanise.",
+    )
+
+    parser.add_argument(
+        "--level",
+        choices=["minimal", "moderate", "full"],
+        default="moderate",
+        help="Aggressiveness of tell detection: minimal, moderate (default), or full. Requires --humanise.",
+    )
+
+    parser.add_argument(
+        "--reading-age",
+        default=None,
+        help="Target reading age (numeric, e.g. 14) or descriptive level (basic/general/advanced/technical). "
+        "Triggers reading age analysis. Requires --humanise.",
+    )
+
+    parser.add_argument(
+        "--report",
+        nargs="?",
+        const="",
+        default=None,
+        help="Save the humanise report to a file. Optional path; defaults to <src>.humanise-report.txt. "
+        "Requires --humanise.",
+    )
+
     args = parser.parse_args()
+
+    # --- Validate humanise-dependent flags ---
+    humanise_dependent = {
+        "--rewrite": args.rewrite,
+        "--annotate": args.annotate,
+        "--reading-age": args.reading_age,
+        "--report": args.report,
+    }
+    # --level only matters if not at default.
+    if args.level != "moderate":
+        humanise_dependent["--level"] = args.level
+
+    if not args.humanise:
+        for flag_name, flag_value in humanise_dependent.items():
+            if flag_value:
+                print(f"Error: {flag_name} requires --humanise", file=sys.stderr)
+                return 2
 
     if args.ignore:
         ignore_path = Path(args.ignore)
@@ -529,6 +719,26 @@ def main() -> int:  # noqa: C901
 
         for word in ignore_words:
             CONVERSION_IGNORE_LIST[word.lower()] = word.lower()
+
+    # --- Humanise dispatch ---
+    if args.humanise:
+        humanise_exit = _run_humanise(args)
+        # If no spelling conversion is requested (no --strict without src
+        # is just humanise-only), return the humanise exit code.
+        # Spelling conversion only runs when src paths are provided and
+        # humanise is combined with them explicitly -- but humanise and
+        # spelling conversion are independent per spec. We run spelling
+        # conversion below only if there are src paths.
+        # For stdin with --humanise, we already handled it in _run_humanise.
+        if not args.src:
+            return humanise_exit
+        # If humanise ran on files, we do NOT also run spelling conversion
+        # unless the user has not used --humanise (which is this branch).
+        # Per spec: "--humanise" runs independently. Spelling conversion
+        # only runs without --humanise.
+        return humanise_exit
+
+    # --- Original spelling conversion logic ---
 
     # Process stdin if no paths provided
     if not args.src:
@@ -556,7 +766,7 @@ def main() -> int:  # noqa: C901
             return 0
     else:
         if modified > 0:
-            print(f"🇬🇧 Reformatted {modified} of {total} files")
+            print(f"\U0001f1ec\U0001f1e7 Reformatted {modified} of {total} files")
         else:
             print(f"All {total} files left unchanged")
         return 0
