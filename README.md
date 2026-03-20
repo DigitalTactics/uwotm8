@@ -138,7 +138,21 @@ The `--humanise` flag detects and removes common patterns found in AI-generated 
 - Smart quotes normalised to straight quotes
 - Non-breaking spaces and zero-width characters removed
 - Unicode ellipsis, fancy bullets, and other artefacts normalised
-- Excessive bold/italic markdown formatting stripped
+- Excessively long italic spans stripped
+
+**Bold text handling:**
+
+AI-generated text tends to overuse bold formatting in distinctive ways. The tool applies context-aware rules to handle bold text differently depending on where it appears:
+
+| Context | Before | After | Rule |
+|---------|--------|-------|------|
+| Bold paragraph opener | `**Remote work is here.** More text` | `Remote work is here: More text` | Strip bold, replace full stop with colon |
+| Bold pseudo-heading | `**Key Benefits**` | `### Key Benefits` | Convert to next available heading level (h1-h6) |
+| Mid-sentence bold | `showed **strong growth** in` | `showed *strong growth* in` | Convert to italic |
+| End-of-sentence bold | `achieved **record results**.` | `achieved *record results*.` | Convert to italic |
+| Bullet-item bold | `- **Revenue** grew` | `- Revenue grew` | Strip bold entirely |
+
+Bold pseudo-headings are detected by checking whether the bold text is short (under 10 words), in title case, has no sentence-ending punctuation, and is the only text on its line. When converted, the heading level is set to one below the lowest unused level already in the document (e.g. if h1-h3 exist, the pseudo-heading becomes h4).
 
 **Structural pattern detection:**
 - Filler phrases ("It's important to note that", "In today's world", "Let's dive in")
@@ -164,7 +178,7 @@ Available rewrite sub-options: `all`, `bullet-lists`, `filler-phrases`, `hedging
 | Level | What it covers |
 |-------|---------------|
 | `minimal` | Non-breaking spaces, zero-width chars, smart quotes, Unicode normalisation |
-| `moderate` (default) | Everything in minimal, plus em dashes, markdown formatting, filler phrases, hedging |
+| `moderate` (default) | Everything in minimal, plus em dashes, bold text handling (openers, pseudo-headings, mid/end-sentence to italic, bullet-item stripping), long italic stripping, filler phrases, hedging |
 | `full` | Everything in moderate, plus bullet list restructuring, paragraph uniformity, repetitive transitions |
 
 **Reading age analysis:**

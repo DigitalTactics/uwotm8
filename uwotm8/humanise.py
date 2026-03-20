@@ -251,6 +251,128 @@ def _rewrite_repetitive_transitions(text: str, pattern: re.Pattern[str]) -> str:
     return result
 
 
+_BOLD_LINE_RE = re.compile(r"^\*\*([^*]+)\*\*\s*$", re.MULTILINE)
+
+_MARKDOWN_HEADING_RE = re.compile(r"^(#{1,6})\s", re.MULTILINE)
+_HTML_HEADING_RE = re.compile(r"<h([1-6])\b", re.IGNORECASE)
+
+_MAX_PSEUDO_HEADING_WORDS = 10
+
+
+def _find_used_heading_levels(text: str) -> set[int]:
+    """Find heading levels already used in the document.
+
+    Scans for both markdown (``#`` through ``######``) and HTML
+    (``<h1>`` through ``<h6>``) heading syntax.
+
+    Args:
+        text: The document text.
+
+    Returns:
+        A set of integers (1-6) representing heading levels in use.
+    """
+    levels: set[int] = set()
+    for match in _MARKDOWN_HEADING_RE.finditer(text):
+        levels.add(len(match.group(1)))
+    for match in _HTML_HEADING_RE.finditer(text):
+        levels.add(int(match.group(1)))
+    return levels
+
+
+def _is_pseudo_heading(text: str) -> bool:
+    """Determine whether bold text looks like a heading rather than a sentence.
+
+    A pseudo-heading is typically short, in title case, and has no
+    sentence-ending punctuation.
+
+    Args:
+        text: The text inside the bold markers.
+
+    Returns:
+        True if the text looks like a heading.
+    """
+    stripped = text.strip()
+    if not stripped:
+        return False
+    # Has sentence-ending punctuation — likely a sentence, not a heading.
+    if stripped[-1] in ".!?":
+        return False
+    # Too many words for a heading.
+    words = stripped.split()
+    if len(words) > _MAX_PSEUDO_HEADING_WORDS:
+        return False
+    # Check title-case-ish: most words start with uppercase (allowing
+    # small words like "of", "the", "and", "in", "for", "to", "a").
+    small_words = {"of", "the", "and", "in", "for", "to", "a", "an", "or", "is", "on", "at", "by", "with"}
+    capitalised = sum(1 for w in words if w[0].isupper() or w.lower() in small_words)
+    return capitalised >= len(words) * 0.7
+
+
+def _next_heading_level(used_levels: set[int]) -> int:
+    """Return the lowest heading level (1-6) not already in use.
+
+    If all levels are used, returns one level below the highest used,
+    capped at 6.
+
+    Args:
+        used_levels: Set of heading levels already present.
+
+    Returns:
+        An integer 1-6.
+    """
+    if not used_levels:
+        return 2  # Default to h2 if no headings exist.
+    max_used = max(used_levels)
+    candidate = max_used + 1
+    return min(candidate, 6)
+
+
+def _convert_bold_pseudo_headings(text: str) -> tuple[str, list[dict[str, Any]]]:
+    """Convert bold pseudo-headings to proper heading markup.
+
+    Detects lines that consist entirely of bold text and look like
+    headings (title case, short, no punctuation). Converts them to the
+    next available markdown heading level.
+
+    Args:
+        text: The document text.
+
+    Returns:
+        A tuple of (modified_text, list_of_findings).
+    """
+    matches = list(_BOLD_LINE_RE.finditer(text))
+    if not matches:
+        return text, []
+
+    # Filter to only pseudo-headings.
+    pseudo_headings = [(m, m.group(1)) for m in matches if _is_pseudo_heading(m.group(1))]
+    if not pseudo_headings:
+        return text, []
+
+    used_levels = _find_used_heading_levels(text)
+    heading_level = _next_heading_level(used_levels)
+    prefix = "#" * heading_level
+
+    findings: list[dict[str, Any]] = []
+    result = text
+
+    # Process in reverse to preserve positions.
+    for match, inner_text in reversed(pseudo_headings):
+        replacement = f"{prefix} {inner_text.strip()}"
+        findings.append(
+            {
+                "tell_name": "bold_pseudo_heading",
+                "line_number": _line_number_for_position(text, match.start()),
+                "original": match.group(),
+                "replacement": replacement,
+            }
+        )
+        result = result[: match.start()] + replacement + "\n" + result[match.end() :]
+
+    findings.reverse()  # Restore original order.
+    return result, findings
+
+
 def humanise_text(
     text: str,
     level: str = "moderate",
@@ -287,6 +409,10 @@ def humanise_text(
 
     findings: list[dict[str, Any]] = []
     result_text = text
+
+    # --- Bold pseudo-headings (before character tells strip the bold) ---
+    result_text, heading_findings = _convert_bold_pseudo_headings(result_text)
+    findings.extend(heading_findings)
 
     # --- Character-level tells (always applied) ---
     for tell in character_tells:

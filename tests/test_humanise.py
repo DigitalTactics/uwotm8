@@ -46,11 +46,17 @@ class TestCharacterLevelTells:
         result = humanise_text(text)
         assert result.text == "Wait for it... there it is."
 
-    def test_excessive_bold_markdown_stripping(self) -> None:
-        """Excessive bold markdown formatting is stripped at moderate tier."""
+    def test_mid_sentence_bold_converted_to_italic(self) -> None:
+        """Mid-sentence bold is converted to italic at moderate tier."""
         text = "This is **very important** and **also bold**."
         result = humanise_text(text, level="moderate")
-        assert result.text == "This is very important and also bold."
+        assert result.text == "This is *very important* and *also bold*."
+
+    def test_bullet_bold_stripped(self) -> None:
+        """Bold in bullet items is stripped entirely at moderate tier."""
+        text = "- **Increased flexibility** for employees"
+        result = humanise_text(text, level="moderate")
+        assert result.text == "- Increased flexibility for employees"
 
     def test_minimal_tier_skips_em_dash_replacement(self) -> None:
         """Minimal tier does not replace em dashes (moderate-tier tell)."""

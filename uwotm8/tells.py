@@ -163,6 +163,28 @@ TELLS.append(
 
 TELLS.append(
     Tell(
+        name="bold_paragraph_opener",
+        category=TellCategory.CHARACTER,
+        pattern=re.compile(r"^\*\*(.+?)\.\*\*", re.MULTILINE),
+        replacement=r"\1:",
+        description="Bold paragraph opening sentence converted to plain text with colon.",
+        tier=TellTier.MODERATE,
+    )
+)
+
+TELLS.append(
+    Tell(
+        name="mid_sentence_bold_to_italic",
+        category=TellCategory.CHARACTER,
+        pattern=re.compile(r"(?<=\w )\*\*(.+?)\*\*"),
+        replacement=r"*\1*",
+        description="Mid-sentence bold converted to italic.",
+        tier=TellTier.MODERATE,
+    )
+)
+
+TELLS.append(
+    Tell(
         name="excessive_bold_markdown",
         category=TellCategory.CHARACTER,
         pattern=re.compile(r"\*\*(.+?)\*\*"),
@@ -176,9 +198,9 @@ TELLS.append(
     Tell(
         name="excessive_italic_markdown",
         category=TellCategory.CHARACTER,
-        pattern=re.compile(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)"),
+        pattern=re.compile(r"(?<!\*)\*(?!\*)(.{80,}?)(?<!\*)\*(?!\*)"),
         replacement=r"\1",
-        description="Excessive italic markdown formatting stripped.",
+        description="Excessively long italic markdown formatting stripped.",
         tier=TellTier.MODERATE,
     )
 )
